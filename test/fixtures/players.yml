@@ -1,0 +1,21 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  xeno_id: 1
+  hand: 1
+  predict_flag: false
+  defence_flag: false
+  mannual_flag: false
+  order: 1
+  line_user_id: 1
+  user_name: MyString
+
+two:
+  xeno_id: 1
+  hand: 1
+  predict_flag: false
+  defence_flag: false
+  mannual_flag: false
+  order: 1
+  line_user_id: 1
+  user_name: MyString

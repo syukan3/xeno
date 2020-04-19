@@ -1,0 +1,13 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  status: 1
+  num_of_player: 1
+  now_order: 1
+  winner_player_id: 1
+
+two:
+  status: 1
+  num_of_player: 1
+  now_order: 1
+  winner_player_id: 1

@@ -1,0 +1,13 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  xeno_id: 1
+  card_num: 1
+  reincarnation_card: false
+  player_id: 1
+
+two:
+  xeno_id: 1
+  card_num: 1
+  reincarnation_card: false
+  player_id: 1
