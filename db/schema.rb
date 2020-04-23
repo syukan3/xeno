@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2020_04_19_030457) do
+ActiveRecord::Schema.define(version: 2020_04_19_070426) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -31,11 +31,11 @@ ActiveRecord::Schema.define(version: 2020_04_19_030457) do
     t.boolean "defence_flag"
     t.boolean "mannual_flag"
     t.integer "order"
-    t.integer "line_user_id"
     t.string "user_name"
-    t.boolean "dead_flag", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "dead_flag", default: false
+    t.string "line_user_id"
   end
 
   create_table "xenos", force: :cascade do |t|

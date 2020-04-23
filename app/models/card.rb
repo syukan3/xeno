@@ -1,4 +1,4 @@
 class Card < ApplicationRecord
   belongs_to :xeno
-  belongs_to :player
+  belongs_to :player, optional: true
 end
