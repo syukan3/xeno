@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2020_04_19_070426) do
+ActiveRecord::Schema.define(version: 2020_04_25_062024) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -22,20 +22,24 @@ ActiveRecord::Schema.define(version: 2020_04_19_070426) do
     t.integer "player_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.boolean "field_flag", default: false
   end
 
   create_table "players", force: :cascade do |t|
-    t.integer "xeno_id", null: false
-    t.integer "hand"
-    t.boolean "predict_flag"
-    t.boolean "defence_flag"
-    t.boolean "mannual_flag"
     t.integer "order"
     t.string "user_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.boolean "dead_flag", default: false
     t.string "line_user_id"
+    t.datetime "attend_flag"
+    t.integer "xeno_id"
+    t.integer "hand_card_num"
+    t.integer "draw_card_num"
+    t.boolean "predict_flag", default: false
+    t.boolean "defence_flag", default: false
+    t.boolean "mannual_flag", default: false
+    t.boolean "playing_flag", default: false
   end
 
   create_table "xenos", force: :cascade do |t|
