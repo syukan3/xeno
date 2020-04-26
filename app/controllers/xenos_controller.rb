@@ -175,6 +175,58 @@ class XenosController < ApplicationController
                 type, *text, card_num = event.message['text'].split('_')
 
                 case card_num.to_i
+                when 5
+
+                  if type == '@target'
+                    target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
+                    drawing(@xeno, target_player)
+
+                    client.multicast( player_ids, display_text( "#{now_player.user_name}さんが\n#{target_player.user_name}さんに\n【死神】5 を発動しました" ) )
+                    client.push_message( target_player.line_user_id,
+                                         display_text( "1枚引きました\n" + "(あなたの手札)\n" + card_ja[:"#{target_player.hand_card_num}"] + "\n" + card_ja[:"#{target_player.draw_card_num}"] )
+                    )
+                    client.push_message( now_player.line_user_id, hide_drop_select_text(@xeno, target_player) )
+
+                  elsif type == '@select'
+
+                    target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
+                    select_card_num = text[1] == 'up' ? target_player.hand_card_num : target_player.draw_card_num
+
+                    # プレイヤーの手札を更新
+                    my_hand = select_card_num == target_player.hand_card_num ? target_player.draw_card_num : target_player.hand_card_num
+                    target_player.update(draw_card_num: nil, hand_card_num: my_hand)
+
+                    # カードをフィールドに出す
+                    card = Card.find_by(xeno_id: @xeno.id, card_num: select_card_num, player_id: target_player.id, field_flag: false)
+                    card.update(field_flag: true)
+
+                    # 死神の結果を公開
+                    client.multicast( player_ids, display_text( now_player.user_name + "が\n" + "【死神】5 発動により\n" + target_player.user_name + "の\n" + card_ja[:"#{select_card_num}"] + "を1枚捨てました" ) )
+
+                    # ステータス
+                    @xeno.update(status: 2)
+
+                    # 順番を更新、次の人に手札とドローカード、選択肢を送信する
+                    next_turn_preparing(@xeno)
+                  end
+
+                when 8
+                  if type == '@target'
+                    target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
+                    exchange_card(now_player, target_player)
+                    client.multicast( player_ids, display_text( "#{now_player.user_name}さんが\n#{target_player.user_name}に\n【交換】を発動しました") )
+
+                    client.multicast( [ target_player.line_user_id, now_player.line_user_id ],
+                                         display_text( "(#{target_player.user_name}の手札)\n#{card_ja[:"#{target_player.hand_card_num}"]}\n\n(#{now_player.user_name}の手札)\n#{card_ja[:"#{now_player.hand_card_num}"]}" )
+                                         )
+                  end
+
+                  # ステータス
+                  @xeno.update(status: 2)
+
+                  # 順番を更新、次の人に手札とドローカード、選択肢を送信する
+                  next_turn_preparing(@xeno)
+
                 when 9
                   if type == '@target'
                     target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
@@ -516,6 +568,22 @@ class XenosController < ApplicationController
     return card_ja
   end
 
+  def display_text_hash
+    display_text_hash = {
+        '1': '○●捜査●○',
+        '2': '○●捜査●○',
+        '3': '○●透視●○',
+        '4': '○●守護●○',
+        '5': '○●疫病●○',
+        '6': '○●対決●○',
+        '7': '○●選択●○',
+        '8': '○●交換●○',
+        '9': '☆★公開処刑★☆',
+        '10': '☆★潜伏・転生★☆'
+    }
+    return display_text_hash
+  end
+
   # 順番が1番目の人に手札とドローカード、選択肢を送信する
   def my_turn(player, draw, card_ja)
     text = "【あなたのターン】\n"
@@ -557,8 +625,7 @@ class XenosController < ApplicationController
       guard_4(player)
       next_turn_preparing(xeno)
     when 5
-      hide_drop_5(player)
-      next_turn_preparing(xeno)
+      hide_drop_5(xeno, player, event_reply_token)
     when 6
       battle_6(player)
       next_turn_preparing(xeno)
@@ -566,8 +633,7 @@ class XenosController < ApplicationController
       predict_7(player)
       next_turn_preparing(xeno)
     when 8
-      exchange_8(player)
-      next_turn_preparing(xeno)
+      exchange_8(xeno, player, event_reply_token)
     when 9
       emperor_9(xeno, player, event_reply_token)
     when 10
@@ -597,8 +663,11 @@ class XenosController < ApplicationController
     player.update(defence_flag: true)
   end
 
-  def hide_drop_5(player)
+  def hide_drop_5(xeno, player, event_reply_token)
+    players = select_target_player(xeno, player)
 
+    xeno.update(status: 3)
+    client.reply_message( event_reply_token, select_target_text(xeno, players, 5) )
   end
 
   def battle_6(player)
@@ -609,11 +678,25 @@ class XenosController < ApplicationController
     player.update(predict_flag: true)
   end
 
-  def exchange_8(player)
+  def exchange_8(xeno, player, event_reply_token)
+    players = select_target_player(xeno, player)
 
+    xeno.update(status: 3)
+    client.reply_message( event_reply_token, select_target_text(xeno, players, 8) )
   end
 
   def emperor_9(xeno, player, event_reply_token)
+    players = select_target_player(xeno, player)
+
+    xeno.update(status: 3)
+    client.reply_message( event_reply_token, select_target_text(xeno, players, 9) )
+  end
+
+  def hero_10(player)
+
+  end
+
+  def select_target_player(xeno, player)
     players = nil
 
     if xeno.num_of_player == 2
@@ -624,17 +707,10 @@ class XenosController < ApplicationController
       players = Player.where(xeno_id: xeno.id).where.not(player_id: player.id)
     end
 
-    xeno.update(status: 3)
-    client.reply_message( event_reply_token, emperor_target_text(xeno, players) )
-    # reply_message
-    # push_message
+    return players
   end
 
-  def hero_10(player)
-
-  end
-
-  def emperor_target_text(xeno, players)
+  def select_target_text(xeno, players, card_num)
     actions = []
     if xeno.num_of_player != 2
       players.each do |player|
@@ -642,7 +718,7 @@ class XenosController < ApplicationController
             {
                 "type": "message",
                 "label": player.user_name,
-                "text": "@target_#{player.id}_9"
+                "text": "@target_#{player.id}_#{card_num}"
             }
         actions.push(action)
       end
@@ -653,7 +729,7 @@ class XenosController < ApplicationController
               "altText": "This is a buttons template",
               "template": {
                   "type": "buttons",
-                  "title": "☆★公開処刑★☆",
+                  "title": display_text_hash[:"#{card_num}"],
                   "text": "対象を選択してください",
                   "actions": [ actions.join(',') ]
               }
@@ -666,7 +742,7 @@ class XenosController < ApplicationController
           {
               "type": "message",
               "label": players.user_name,
-              "text": "@target_#{players.id}_9"
+              "text": "@target_#{players.id}_#{card_num}"
           }
       actions.push(action)
 
@@ -676,7 +752,7 @@ class XenosController < ApplicationController
               "altText": "This is a buttons template",
               "template": {
                   "type": "buttons",
-                  "title": "☆★公開処刑★☆",
+                  "title": display_text_hash[:"#{card_num}"],
                   "text": "対象を選択してください",
                   "actions": actions
               }
@@ -685,8 +761,40 @@ class XenosController < ApplicationController
     end
   end
 
+  def hide_drop_select_text(xeno, target_player)
+    {
+        "type": "template",
+        "altText": "This is a buttons template",
+        "template": {
+            "type": "buttons",
+            "title": display_text_hash[:"#{5}"],
+            "text": "捨てるカードを選択してください",
+            "actions": [
+                {
+                    "type": "message",
+                    "label": "上",
+                    "text": "@select_#{target_player.id}_up_5"
+                },
+                {
+                    "type": "message",
+                    "label": "下",
+                    "text": "@select_#{target_player.id}_down_5"
+                }
+            ]
+        }
+    }
+  end
+
+  def exchange_card(now_player, target_player)
+    now_player_card_num = now_player.hand_card_num
+    target_player_card_num = target_player.hand_card_num
+
+    now_player.update(hand_card_num: target_player_card_num)
+    target_player.update(hand_card_num: now_player_card_num)
+  end
+
   def display_emperor(xeno, target_player, card_ja)
-    text = "☆★公開処刑★☆\n"
+    text =  display_text_hash[:"#{9}"] + "\n"
     text += "（#{target_player.user_name} さんの手札）\n"
     text += card_ja[:"#{target_player.hand_card_num}"] + "\n"
     text += card_ja[:"#{target_player.draw_card_num}"]
@@ -699,7 +807,7 @@ class XenosController < ApplicationController
         "altText": "This is a buttons template",
         "template": {
             "type": "buttons",
-            "title": "☆★公開処刑★☆",
+            "title": display_text_hash[:"#{9}"],
             "text": "処刑するカードを選択してください",
             "actions": [
                 {
