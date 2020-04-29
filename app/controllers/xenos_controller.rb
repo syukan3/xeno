@@ -6,10 +6,8 @@ class XenosController < ApplicationController
 
   def client
     @client ||= Line::Bot::Client.new { |config|
-      # config.channel_secret = ENV["LINE_CHANNEL_SECRET"]
-      # config.channel_token = ENV["LINE_CHANNEL_TOKEN"]
-      config.channel_secret = '3818f37afdec543f7b60f131b70a24fb'
-      config.channel_token = 'XNhKeAgPmhhgyIkcB/lEHMF5etmfBq7PCZxl9Sf14IeTGVpjrxkyWmDkoW1aqCmbDo9MTzjIxetZIcGsHBBlU/l2wLbHs5nOiZTXWF2Fm8r/SoUZSrns4rO0KeldF13zRwz7vUqbENZjIulGhyEhIgdB04t89/1O/w1cDnyilFU=XNhKeAgPmhhgyIkcB/lEHMF5etmfBq7PCZxl9Sf14IeTGVpjrxkyWmDkoW1aqCmbDo9MTzjIxetZIcGsHBBlU/l2wLbHs5nOiZTXWF2Fm8r/SoUZSrns4rO0KeldF13zRwz7vUqbENZjIulGhyEhIgdB04t89/1O/w1cDnyilFU='
+      config.channel_secret = ENV["LINE_CHANNEL_SECRET"]
+      config.channel_token = ENV["LINE_CHANNEL_TOKEN"]
     }
   end
 
@@ -103,9 +101,17 @@ class XenosController < ApplicationController
               now_player = Player.find_by(xeno_id: @xeno.id, order: @xeno.now_order)
               if now_player.line_user_id == event["source"]["userId"]
 
-                # カードを使うメソッドを実行
-                # [ 使うカード, 使う相手 ]
-                use_card(@xeno, now_player, event.message['text'].slice(1).to_i, event['replyToken'])
+                use_card_id = event.message['text'].split("@")[1].to_i
+                if Card.find(use_card_id).card_num == 10
+                  client.reply_message(event['replyToken'],
+                                       [
+                                           display_text(card_ja[:"10"] + "\nは使用できません\n再度使用するカードを選択してください"),
+                                           select_card(now_player, card_ja)
+                                       ]
+                                       )
+                end
+
+                use_card(@xeno, now_player, use_card_id, event['replyToken'])
 
                 # カードの効果
 
@@ -173,7 +179,7 @@ class XenosController < ApplicationController
                                             display_text( xeno_status(@xeno, players, not_field_cards) )
                                         ]
                       )
-                      client.push_message( target_player.line_user_id, display_text( "(あなたの手札)\n" + card_ja[:"#{target_player.hand_card_num}"] ) )
+                      client.push_message( target_player.line_user_id, display_text( "(あなたの手札)\n" + card_ja[:"#{target_player.hand_card.card_num}"] ) )
 
                       client.push_message( now_player.line_user_id, seeing_select_text(@xeno, target_player, not_field_cards) )
 
@@ -184,7 +190,7 @@ class XenosController < ApplicationController
                     target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
                     select_card_num = text[1].to_i
 
-                    if select_card_num == target_player.hand_card_num
+                    if select_card_num == target_player.hand_card.card_num
                       client.multicast( player_ids,
                                         [
                                             display_text( "#{now_player.user_name}は\n#{target_player.user_name}のカードを\n" + card_ja[:"#{select_card_num}"] + "\nと推測しました" ),
@@ -236,7 +242,7 @@ class XenosController < ApplicationController
 
                       client.multicast( player_ids, display_text( "#{now_player.user_name}さんが\n#{target_player.user_name}に\n#{card_ja[:"3"]}\nを発動しました") )
 
-                      client.push_message( now_player.line_user_id, display_text( "#{target_player.user_name}さんは\n" + card_ja[:"#{target_player.hand_card_num}"] + "\nを所有しています" ) )
+                      client.push_message( now_player.line_user_id, display_text( "#{target_player.user_name}さんは\n" + card_ja[:"#{target_player.hand_card.card_num}"] + "\nを所有しています" ) )
 
                       client.push_message( target_player.line_user_id, display_text( "#{now_player.user_name}さんに\n所有しているカードを見せました" ) )
 
@@ -265,31 +271,34 @@ class XenosController < ApplicationController
 
                     else
 
-                      drawing(@xeno, target_player)
+                      card = drawing(xeno, next_player)
 
-                      client.multicast( player_ids, display_text( "#{now_player.user_name}さんが\n#{target_player.user_name}さんに\n#{card_ja[:"5"]}\nを発動しました" ) )
-                      client.push_message( target_player.line_user_id,
-                                           display_text( "1枚引きました\n" + "(あなたの手札)\n" + card_ja[:"#{target_player.hand_card_num}"] + "\n" + card_ja[:"#{target_player.draw_card_num}"] )
-                      )
-                      client.push_message( now_player.line_user_id, hide_drop_select_text(@xeno, target_player) )
+                      if card
 
+                        client.multicast( player_ids, display_text( "#{now_player.user_name}さんが\n#{target_player.user_name}さんに\n#{card_ja[:"5"]}\nを発動しました" ) )
+                        client.push_message( target_player.line_user_id,
+                                             display_text( "1枚引きました\n" + "(あなたの手札)\n" + card_ja[:"#{target_player.hand_card.card_num}"] + "\n" + card_ja[:"#{target_player.draw_card.card_num}"] )
+                        )
+                        client.push_message( now_player.line_user_id, hide_drop_select_text(@xeno, target_player) )
+
+                      end
                     end
 
                   elsif type == '@select'
 
                     target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
-                    select_card_num = text[1] == 'up' ? target_player.hand_card_num : target_player.draw_card_num
+                    select_card_id = text[1] == 'up' ? target_player.hand_card_num : target_player.draw_card_num
 
                     # プレイヤーの手札を更新
-                    my_hand = select_card_num == target_player.hand_card_num ? target_player.draw_card_num : target_player.hand_card_num
-                    target_player.update(draw_card_num: nil, hand_card_num: my_hand)
+                    my_hand_card_id = select_card_id == target_player.hand_card_num ? target_player.draw_card_num : target_player.hand_card_num
+                    target_player.update(draw_card_num: nil, hand_card_num: my_hand_card_id)
 
                     # カードをフィールドに出す
-                    card = Card.find_by(xeno_id: @xeno.id, card_num: select_card_num, player_id: target_player.id, field_flag: false)
+                    card = Card.find(select_card_id)
                     card.update(field_flag: true)
 
                     # 死神の結果を公開
-                    client.multicast( player_ids, display_text( now_player.user_name + "が\n" + "【死神】5 発動により\n" + target_player.user_name + "の\n" + card_ja[:"#{select_card_num}"] + "を1枚捨てました" ) )
+                    client.multicast( player_ids, display_text( now_player.user_name + "が\n" + "【死神】5 発動により\n" + target_player.user_name + "の\n" + card_ja[:"#{card.card_num}"] + "を1枚捨てました" ) )
 
                     # ステータス
                     @xeno.update(status: 2)
@@ -321,7 +330,7 @@ class XenosController < ApplicationController
                         client.multicast( player_ids,
                                           [
                                               display_text( "勝者：#{winner.user_name}\n敗者：#{loser.user_name}\n\n#{loser.user_name}さんは\nゲーム終了です" ),
-                                              display_text( "#{loser.user_name}さんは\n#{card_ja[:"#{loser.hand_card_num}"]}\nを持っていました" )
+                                              display_text( "#{loser.user_name}さんは\n#{card_ja[:"#{loser.hand_card.card_num}"]}\nを持っていました" )
                                           ]
                         )
 
@@ -355,22 +364,22 @@ class XenosController < ApplicationController
                 when 7
                   if type == '@select'
 
-                    select_card_num = text[1].to_i
+                    select_card_id = text[1].to_i
 
                     # プレイヤーの手札を更新
-                    now_player.update(draw_card_num: select_card_num)
+                    now_player.update(draw_card_num: select_card_id)
 
                     # ステータス
                     @xeno.update(status: 2)
 
                     # 使用するカードを選択
-                    client.reply_message(event['replyToken'], select_card(now_player, now_player.draw_card_num, card_ja))
+                    client.reply_message(event['replyToken'], select_card(now_player, card_ja))
 
                   end
 
                 when 8
                   if type == '@target'
-                    target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
+                    target_player = Player.find(text[0].to_i)
 
                     if target_player_guard?(now_player, target_player, player_ids, 8)
 
@@ -386,7 +395,7 @@ class XenosController < ApplicationController
                       client.multicast( player_ids, display_text( "#{now_player.user_name}さんが\n#{target_player.user_name}に\n#{card_ja[:"8"]}\nを発動しました") )
 
                       client.multicast( [ target_player.line_user_id, now_player.line_user_id ],
-                                        display_text( "(#{target_player.user_name}の手札)\n#{card_ja[:"#{target_player.hand_card_num}"]}\n\n(#{now_player.user_name}の手札)\n#{card_ja[:"#{now_player.hand_card_num}"]}" )
+                                        display_text( "(#{target_player.user_name}の手札)\n#{card_ja[:"#{target_player.hand_card.card_num}"]}\n\n(#{now_player.user_name}の手札)\n#{card_ja[:"#{now_player.hand_card.card_num}"]}" )
                       )
 
                       # ステータス
@@ -400,7 +409,7 @@ class XenosController < ApplicationController
 
                 when 9
                   if type == '@target'
-                    target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
+                    target_player = Player.find(text[0].to_i)
 
                     if target_player_guard?(now_player, target_player, player_ids, 9)
 
@@ -412,36 +421,38 @@ class XenosController < ApplicationController
 
                     else
 
-                      drawing(@xeno, target_player)
-                      client.push_message( target_player.line_user_id,
-                                           [
-                                               display_text( "#{now_player.user_name}さんがあなたに\n#{card_ja[:"9"]}\nを発動しました"),
-                                               display_text( "1枚引きました\n" + "(あなたの手札)\n" + card_ja[:"#{target_player.hand_card_num}"] + "\n" + card_ja[:"#{target_player.draw_card_num}"] )
-                                           ]
-                      )
-                      client.multicast( player_ids, display_text( display_emperor(@xeno, target_player, card_ja) ) )
-                      client.push_message( now_player.line_user_id, emperor_select_text(@xeno, target_player, card_ja) )
+                      card = drawing(@xeno, target_player)
 
+                      if card
+
+                        client.push_message( target_player.line_user_id,
+                                             [
+                                                 display_text( "#{now_player.user_name}さんがあなたに\n#{card_ja[:"9"]}\nを発動しました"),
+                                                 display_text( "1枚引きました\n" + "(あなたの手札)\n" + card_ja[:"#{target_player.hand_card.card_num}"] + "\n" + card_ja[:"#{target_player.draw_card.card_num}"] )
+                                             ]
+                        )
+                        client.multicast( player_ids, display_text( display_emperor(@xeno, target_player, card_ja) ) )
+                        client.push_message( now_player.line_user_id, emperor_select_text(@xeno, target_player, card_ja) )
+
+                      end
                     end
 
                   elsif type == '@select'
 
                     target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
-                    select_card_num = text[1].to_i
+                    select_card = Card.find(text[1].to_i)
 
                     # プレイヤーの手札を更新
-                    my_hand = select_card_num == target_player.hand_card_num ? target_player.draw_card_num : target_player.hand_card_num
-                    target_player.update(draw_card_num: nil, hand_card_num: my_hand)
+                    my_hand_card_id = select_card.id == target_player.hand_card_num ? target_player.draw_card_num : target_player.hand_card_num
+                    target_player.update(draw_card_num: nil, hand_card_num: my_hand_card_id)
 
                     # カードをフィールドに出す
-                    card = Card.find_by(xeno_id: @xeno.id, card_num: select_card_num, player_id: target_player.id, field_flag: false)
-                    byebug
-                    card.update(field_flag: true)
+                    select_card.update(field_flag: true)
 
                     # 公開処刑の結果を公開
-                    client.multicast( player_ids, display_text( now_player.user_name + "は\n" + target_player.user_name + "の\n" + card_ja[:"#{card.card_num}"] + "\nを【公開処刑】しました" ) )
+                    client.multicast( player_ids, display_text( now_player.user_name + "は\n" + target_player.user_name + "の\n" + card_ja[:"#{select_card.card_num}"] + "\nを【公開処刑】しました" ) )
 
-                    if card.card_num == 10
+                    if select_card.card_num == 10
                       dead_process(@xeno, target_player)
 
                       # ステータス
@@ -672,9 +683,9 @@ class XenosController < ApplicationController
 
     # 順番が1番目の人に手札とドローカード、選択肢を送信する
     first_player = Player.find_by(xeno_id: xeno.id, order: xeno.now_order)
-    draw_card_num = drawing(xeno, first_player).card_num
+    drawing(xeno, first_player)
 
-    client.push_message( first_player.line_user_id, [ display_text(my_turn(first_player, draw_card_num, card_ja)), select_card(first_player, draw_card_num, card_ja) ] )
+    client.push_message( first_player.line_user_id, [ display_text(my_turn(first_player, card_ja)), select_card(first_player, card_ja) ] )
 
     # 順番が1番目以外の人に手札カードを送信する
     other_players = Player.where(xeno_id: xeno.id).where.not(order: xeno.now_order)
@@ -741,7 +752,7 @@ class XenosController < ApplicationController
 
   end
 
-  def select_card(first_player, draw_card_num, card_ja)
+  def select_card(player, card_ja)
     {
         "type": "template",
         "altText": "This is a buttons template",
@@ -752,13 +763,13 @@ class XenosController < ApplicationController
             "actions": [
                 {
                     "type": "message",
-                    "label": card_ja[:"#{first_player.hand_card_num}"],
-                    "text": "@#{first_player.hand_card_num}"
+                    "label": card_ja[:"#{player.hand_card.card_num}"],
+                    "text": "@#{player.hand_card.id}"
                 },
                 {
                     "type": "message",
-                    "label": card_ja[:"#{draw_card_num}"],
-                    "text": "@#{draw_card_num}"
+                    "label": card_ja[:"#{player.draw_card.card_num}"],
+                    "text": "@#{player.draw_card.id}"
                 }
             ]
         }
@@ -833,7 +844,7 @@ class XenosController < ApplicationController
     ActiveRecord::Base.transaction do
       players.each do |player|
         card = Card.where(xeno_id: xeno.id, reincarnation_card: false, player_id: nil).shuffle.first
-        player.update(hand_card_num: card.card_num)
+        player.update(hand_card_num: card.id)
         card.update(player_id: player.id)
       end
     end
@@ -872,9 +883,19 @@ class XenosController < ApplicationController
 
     deck = Card.where(xeno_id: xeno.id, reincarnation_card: false, player_id: nil)
 
+    # 山札にカードがなければ、最終バトル
+    if deck.length == 0
+      if xeno.status == 2
+        last_battle(xeno)
+        return false
+      elsif xeno.status == 3
+        return false
+      end
+    end
+
     card = deck.shuffle.first
     card.update(player_id: player.id)
-    player.update(draw_card_num: card.card_num)
+    player.update(draw_card_num: card.id)
     return card
 
   end
@@ -890,7 +911,7 @@ class XenosController < ApplicationController
           {
               "type": "message",
               "label": card_ja[:"#{card.card_num}"],
-              "text": "@select_#{next_player.id}_#{card.card_num}"
+              "text": "@select_#{next_player.id}_#{card.id}_7"
           }
       actions.push(action)
     end
@@ -915,11 +936,6 @@ class XenosController < ApplicationController
     # 山札の枚数を確認
     deck = Card.where(xeno_id: xeno.id, reincarnation_card: false, player_id: nil)
 
-    # 山札にカードがなければ、最終バトル
-    if deck.length == 0
-      last_battle(xeno)
-    end
-
     # 順番を更新
     xeno.update(now_order: next_order(xeno))
 
@@ -943,20 +959,24 @@ class XenosController < ApplicationController
         predict_drawing(xeno, next_player, deck)
 
       # 山札のカードが1枚以上3枚未満あれば、通常通り1枚カードを引く
-      elsif deck.length >= 1 && deck.length < 3
+      elsif deck.length < 3
 
-        draw_card_num = drawing(xeno, next_player).card_num
-        client.push_message( next_player.line_user_id,
-                             [ display_text(my_turn(next_player, draw_card_num, card_ja)), select_card(next_player, draw_card_num, card_ja) ] )
+        card = drawing(xeno, next_player)
 
+        if card
+          client.push_message( next_player.line_user_id,
+                               [ display_text(my_turn(next_player, card_ja)), select_card(next_player, card_ja) ] )
+        end
       end
 
     else
 
-      draw_card_num = drawing(xeno, next_player).card_num
-      client.push_message( next_player.line_user_id,
-                           [ display_text(my_turn(next_player, draw_card_num, card_ja)), select_card(next_player, draw_card_num, card_ja) ] )
+      card = drawing(xeno, next_player)
 
+      if card
+        client.push_message( next_player.line_user_id,
+                             [ display_text(my_turn(next_player, card_ja)), select_card(next_player, card_ja) ] )
+      end
     end
 
   end
@@ -996,34 +1016,34 @@ class XenosController < ApplicationController
   end
 
   # 順番が1番目の人に手札とドローカード、選択肢を送信する
-  def my_turn(player, draw, card_ja)
+  def my_turn(player, card_ja)
     text = "【あなたのターン】\n"
     text += "（手札）\n"
-    text += card_ja[:"#{player.hand_card_num}"]
+    text += card_ja[:"#{player.hand_card.card_num}"]
     text += "\n"
-    text += card_ja[:"#{draw}"]
+    text += card_ja[:"#{player.draw_card.card_num}"]
     return text
   end
 
   # 順番が1番目以外の人に手札カードを送信する
   def other_turn(player, card_ja)
     text = "（あなたの手札）\n"
-    text += card_ja[:"#{player.hand_card_num}"]
+    text += card_ja[:"#{player.hand_card.card_num}"]
     return text
   end
 
-  def use_card(xeno, player, number, event_reply_token)
+  def use_card(xeno, player, use_card_id, event_reply_token)
     # プレイヤーの手札を更新
-    my_hand = number == player.hand_card_num ? player.draw_card_num : player.hand_card_num
-    player.update(draw_card_num: nil, hand_card_num: my_hand)
+    my_hand_card_id = use_card_id == player.hand_card.id ? player.draw_card.id : player.hand_card.id
+    player.update(draw_card_num: nil, hand_card_num: my_hand_card_id)
 
     # カードをフィールドに出す
-    card = Card.find_by(xeno_id: xeno.id, card_num: number, player_id: player.id, field_flag: false)
+    card = Card.find(use_card_id)
     card.update(field_flag: true)
 
     continue_flag = false
     #
-    case number
+    case card.card_num
     when 1
       revolution_1(xeno, player, event_reply_token)
     when 2
@@ -1326,8 +1346,8 @@ class XenosController < ApplicationController
   end
 
   def battle_on_doing(now_player, target_player)
-    now_player_card_num = now_player.hand_card_num
-    target_player_card_num = target_player.hand_card_num
+    now_player_card_num = now_player.hand_card.card_num
+    target_player_card_num = target_player.hand_card.card_num
 
     if now_player_card_num > target_player_card_num
       winner = now_player
@@ -1341,25 +1361,25 @@ class XenosController < ApplicationController
     end
 
     client.multicast( [ target_player.line_user_id, now_player.line_user_id ],
-                          display_text( "(#{target_player.user_name}の手札)\n#{card_ja[:"#{target_player.hand_card_num}"]}\n\n(#{now_player.user_name}の手札)\n#{card_ja[:"#{now_player.hand_card_num}"]}")
+                          display_text( "(#{target_player.user_name}の手札)\n#{card_ja[:"#{target_player.hand_card.card_num}"]}\n\n(#{now_player.user_name}の手札)\n#{card_ja[:"#{now_player.hand_card.card_num}"]}")
     )
 
     return [ winner, loser ]
   end
 
   def exchange_card(now_player, target_player)
-    now_player_card_num = now_player.hand_card_num
-    target_player_card_num = target_player.hand_card_num
+    now_player.update(hand_card_num: target_player.hand_card.id)
+    target_player.update(hand_card_num: now_player.hand_card.id)
 
-    now_player.update(hand_card_num: target_player_card_num)
-    target_player.update(hand_card_num: now_player_card_num)
+    now_player.hand_card.update(player_id: target_player.id)
+    target_player.hand_card.update(player_id: now_player.id)
   end
 
   def display_emperor(xeno, target_player, card_ja)
     text =  display_text_hash[:"#{9}"] + "\n"
     text += "（#{target_player.user_name} さんの手札）\n"
-    text += card_ja[:"#{target_player.hand_card_num}"] + "\n"
-    text += card_ja[:"#{target_player.draw_card_num}"]
+    text += card_ja[:"#{target_player.hand_card.card_num}"] + "\n"
+    text += card_ja[:"#{target_player.draw_card.card_num}"]
     return text
   end
 
@@ -1374,12 +1394,12 @@ class XenosController < ApplicationController
             "actions": [
                 {
                     "type": "message",
-                    "label": card_ja[:"#{target_player.hand_card_num}"],
+                    "label": card_ja[:"#{target_player.hand_card.card_num}"],
                     "text": "@select_#{target_player.id}_#{target_player.hand_card_num}_9"
                 },
                 {
                     "type": "message",
-                    "label": card_ja[:"#{target_player.draw_card_num}"],
+                    "label": card_ja[:"#{target_player.draw_card.card_num}"],
                     "text": "@select_#{target_player.id}_#{target_player.draw_card_num}_9"
                 }
             ]
@@ -1389,12 +1409,12 @@ class XenosController < ApplicationController
 
   def dead_process(xeno, loser)
 
+    # カードをフィールドに出す
+    card = Card.find(loser.hand_card_num)
+    card.update(field_flag: true)
+
     # プレイヤーは負け
     loser.update(dead_flag: true, hand_card_num: nil, predict_flag: nil, defence_flag: nil)
-
-    # カードをフィールドに出す
-    card = Card.find_by(xeno_id: xeno.id, player_id: loser.id, field_flag: false)
-    card.update(field_flag: true)
 
   end
 
@@ -1412,6 +1432,34 @@ class XenosController < ApplicationController
     else
       return true
     end
+  end
+
+  def last_battle(xeno)
+    players = Player.where(xeno_id: xeno.id)
+    alive_players = players.where(dead_flag: false)
+                        .sort { |a, b| b.hand_card.card_num <=> a.hand_card.card_num }
+
+    xeno.update(status: 4, winner_player_id: alive_players.first.id)
+
+    text = "【最終結果】\n"
+    text += "★勝者：#{player.user_name}★\n\n"
+
+    alive_players.each do |player|
+      text += "（#{player.user_name}の手札）\n"
+      text += card_ja[:"#{player.hand_card.card_num}"] + "\n"
+    end
+
+    dead_players = players.where(dead_flag: true)
+
+    text += "\n途中敗退\n"
+    dead_players.each do |player|
+      text += "#{player.user_name}\n"
+    end
+
+    player_ids = players.pluck(:line_user_id)
+
+    client.multicast( player_ids, display_text( text ) )
+
   end
 
   def reset_player
