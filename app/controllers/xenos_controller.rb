@@ -110,11 +110,11 @@ class XenosController < ApplicationController
                                            display_text(card_ja[:"10"] + "\nは使用できません\n再度使用するカードを選択してください"),
                                            select_card(now_player, card_ja)
                                        ]
-                                       )
+                  )
+                  return
+                else
+                  use_card(@xeno, now_player, use_card_id, event['replyToken'])
                 end
-
-                use_card(@xeno, now_player, use_card_id, event['replyToken'])
-
                 # カードの効果
 
 
@@ -192,32 +192,56 @@ class XenosController < ApplicationController
                     target_player = Player.find_by(xeno_id: @xeno.id, id: text[0].to_i)
                     select_card_num = text[1].to_i
 
+                    messages = [
+                        display_text( "#{now_player.user_name}は\n#{target_player.user_name}のカードを\n" + card_ja[:"#{select_card_num}"] + "\nと推測しました" )
+                    # display_text( "正解です。\n#{target_player.user_name}\nは負けました" )
+                    ]
+
                     if select_card_num == target_player.hand_card.card_num
-                      client.multicast( player_ids,
-                                        [
-                                            display_text( "#{now_player.user_name}は\n#{target_player.user_name}のカードを\n" + card_ja[:"#{select_card_num}"] + "\nと推測しました" ),
-                                            display_text( "正解です。\n#{target_player.user_name}\nは負けました" )
-                                        ]
-                      )
 
-                      dead_process(@xeno, target_player)
+                      if select_card_num == 10
 
-                      # ステータス
-                      @xeno.update(status: 2)
+                        messages << display_text( "正解です。\n#{target_player.user_name}\nは転生します" )
 
-                      # ゲーム続行判定
-                      continue_flag = judge_xeno(@xeno, player_ids)
+                        # 転生
+                        check_reincarnation(@xeno, target_player, target_player.hand_card, messages)
 
-                      # 順番を更新、次の人に手札とドローカード、選択肢を送信する
-                      next_turn_preparing(@xeno) if continue_flag
+                        # 結果を公開
+                        client.multicast( player_ids, messages )
+
+                        # 転生者に通知
+                        client.push_message( target_player.line_user_id, display_text( "転生札は\n" + card_ja[:"#{target_player.hand_card.card_num}"] + "\nです" ) ) if select_card_num == 10
+
+                        # ステータス
+                        @xeno.update(status: 2)
+
+                        # 順番を更新、次の人に手札とドローカード、選択肢を送信する
+                        next_turn_preparing(@xeno)
+
+                      else
+
+                        messages << display_text( "正解です。\n#{target_player.user_name}\nは負けました" )
+
+                        # 結果を公開
+                        client.multicast( player_ids, messages)
+
+                        dead_process(@xeno, target_player)
+
+                        # ステータス
+                        @xeno.update(status: 2)
+
+                        # ゲーム続行判定
+                        continue_flag = judge_xeno(@xeno, player_ids)
+
+                        # 順番を更新、次の人に手札とドローカード、選択肢を送信する
+                        next_turn_preparing(@xeno) if continue_flag
+
+                      end
 
                     else
-                      client.multicast( player_ids,
-                                        [
-                                            display_text( "#{now_player.user_name}は\n#{target_player.user_name}のカードを\n" + card_ja[:"#{select_card_num}"] + "\nと推測しました" ),
-                                            display_text( "違います。" )
-                                        ]
-                      )
+
+                      messages << display_text( "違います。" )
+                      client.multicast( player_ids, messages )
 
                       # ステータス
                       @xeno.update(status: 2)
@@ -273,7 +297,7 @@ class XenosController < ApplicationController
 
                     else
 
-                      card = drawing(xeno, next_player)
+                      card = drawing(@xeno, target_player)
 
                       if card
 
@@ -296,11 +320,22 @@ class XenosController < ApplicationController
                     target_player.update(draw_card_num: nil, hand_card_num: my_hand_card_id)
 
                     # カードをフィールドに出す
-                    card = Card.find(select_card_id)
-                    card.update(field_flag: true)
+                    select_card = Card.find(select_card_id)
+                    select_card.update(field_flag: true)
+
+
+                    messages = [
+                        display_text( now_player.user_name + "が\n" + "【死神】5 発動により\n" + target_player.user_name + "の\n" + card_ja[:"#{select_card.card_num}"] + "を1枚捨てました" )
+                    ]
+
+                    # 転生するかどうかの確認
+                    check_reincarnation(@xeno, target_player, select_card, messages)
 
                     # 死神の結果を公開
-                    client.multicast( player_ids, display_text( now_player.user_name + "が\n" + "【死神】5 発動により\n" + target_player.user_name + "の\n" + card_ja[:"#{card.card_num}"] + "を1枚捨てました" ) )
+                    client.multicast( player_ids, messages )
+
+                    # 転生者に通知
+                    client.push_message( target_player.line_user_id, display_text( "転生札は\n" + card_ja[:"#{target_player.hand_card.card_num}"] + "\nです" ) ) if select_card.card_num == 10
 
                     # ステータス
                     @xeno.update(status: 2)
@@ -409,7 +444,7 @@ class XenosController < ApplicationController
                     end
                   end
 
-                when 9
+                when 9, 19
                   if type == '@target'
                     target_player = Player.find(text[0].to_i)
 
@@ -434,7 +469,7 @@ class XenosController < ApplicationController
                                              ]
                         )
                         client.multicast( player_ids, display_text( display_emperor(@xeno, target_player, card_ja) ) )
-                        client.push_message( now_player.line_user_id, emperor_select_text(@xeno, target_player, card_ja) )
+                        client.push_message( now_player.line_user_id, emperor_select_text(@xeno, target_player, card_ja, card_num.to_i) )
 
                       end
                     end
@@ -451,28 +486,55 @@ class XenosController < ApplicationController
                     # カードをフィールドに出す
                     select_card.update(field_flag: true)
 
-                    # 公開処刑の結果を公開
-                    client.multicast( player_ids, display_text( now_player.user_name + "は\n" + target_player.user_name + "の\n" + card_ja[:"#{select_card.card_num}"] + "\nを【公開処刑】しました" ) )
+                    messages = [
+                        display_text( "正解です。\n#{target_player.user_name}\nは負けました" )
+                    ]
 
                     if select_card.card_num == 10
-                      dead_process(@xeno, target_player)
 
-                      # ステータス
-                      @xeno.update(status: 2)
+                      case card_num.to_i
+                      when 9
+                        dead_process(@xeno, target_player)
 
-                      # ゲーム続行判定
-                      continue_flag = judge_xeno(@xeno, player_ids)
+                        # 公開処刑の結果を公開
+                        client.multicast( player_ids, messages )
 
-                      # 順番を更新、次の人に手札とドローカード、選択肢を送信する
-                      next_turn_preparing(@xeno) if continue_flag
+                        # ステータス
+                        @xeno.update(status: 2)
+
+                        # ゲーム続行判定
+                        continue_flag = judge_xeno(@xeno, player_ids)
+
+                        # 順番を更新、次の人に手札とドローカード、選択肢を送信する
+                        next_turn_preparing(@xeno) if continue_flag
+
+                      when 19
+
+                        # 転生するかどうかの確認
+                        check_reincarnation(@xeno, target_player, target_player.hand_card, messages)
+
+                        # 公開処刑の結果を公開
+                        client.multicast( player_ids, messages )
+
+                        # ステータス
+                        @xeno.update(status: 2)
+
+                        # 順番を更新、次の人に手札とドローカード、選択肢を送信する
+                        next_turn_preparing(@xeno)
+
+                      end
 
                     else
+
+                      # 公開処刑の結果を公開
+                      client.multicast( player_ids, messages )
 
                       # ステータス
                       @xeno.update(status: 2)
 
                       # 順番を更新、次の人に手札とドローカード、選択肢を送信する
                       next_turn_preparing(@xeno)
+
                     end
                   end
                 end
@@ -835,7 +897,8 @@ class XenosController < ApplicationController
 
     Card.destroy_all
 
-    card_list=[1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,10]
+    # card_list=[1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,10]
+    card_list=[1,1,1,1,10,10,10]
     card_list.each { |card_num| Card.create(xeno_id: xeno.id, card_num: card_num, reincarnation_card: false) }
 
     reincarnation_card = Card.all.shuffle.first
@@ -1068,7 +1131,6 @@ class XenosController < ApplicationController
       emperor_9(xeno, player, event_reply_token)
     when 10
       hero_10(player)
-      next_turn_preparing(xeno)
     end
   end
 
@@ -1077,7 +1139,7 @@ class XenosController < ApplicationController
     player_ids = Player.where(xeno_id: xeno.id).pluck(:line_user_id)
     if cards.length == 2
       client.multicast( player_ids, display_text( "#{player.user_name}が\n" + card_ja[:"1"] + "\nの2枚目を発動しました。" ) )
-      emperor_9(xeno, player, event_reply_token)
+      emperor_19(xeno, player, event_reply_token)
     else
       client.multicast( player_ids, display_text( "#{player.user_name}が\n" + card_ja[:"1"] + "\nの1枚目を発動しました。" ) )
       next_turn_preparing(xeno)
@@ -1143,6 +1205,13 @@ class XenosController < ApplicationController
 
     xeno.update(status: 3)
     client.reply_message( event_reply_token, select_target_text(xeno, players, 9) )
+  end
+
+  def emperor_19(xeno, player, event_reply_token)
+    players = select_target_player(xeno, player)
+
+    xeno.update(status: 3)
+    client.reply_message( event_reply_token, select_target_text(xeno, players, 19) )
   end
 
   def hero_10(player)
@@ -1392,7 +1461,7 @@ class XenosController < ApplicationController
     return text
   end
 
-  def emperor_select_text(xeno, target_player, card_ja)
+  def emperor_select_text(xeno, target_player, card_ja, card_num)
     {
         "type": "template",
         "altText": "This is a buttons template",
@@ -1404,16 +1473,32 @@ class XenosController < ApplicationController
                 {
                     "type": "message",
                     "label": card_ja[:"#{target_player.hand_card.card_num}"],
-                    "text": "@select_#{target_player.id}_#{target_player.hand_card_num}_9"
+                    "text": "@select_#{target_player.id}_#{target_player.hand_card_num}_#{card_num}"
                 },
                 {
                     "type": "message",
                     "label": card_ja[:"#{target_player.draw_card.card_num}"],
-                    "text": "@select_#{target_player.id}_#{target_player.draw_card_num}_9"
+                    "text": "@select_#{target_player.id}_#{target_player.draw_card_num}_#{card_num}"
                 }
             ]
         }
     }
+  end
+
+  # 転生するかどうかの確認 && 転生
+  def check_reincarnation(xeno, target_player, select_card, messages)
+    if select_card.card_num == 10
+      # 転生札を抽出
+      reincarnation_card = Card.find_by(xeno_id: xeno.id, reincarnation_card: true)
+      # tatget_player の手札を捨てる
+      target_player.hand_card.update(field_flag: true)
+      # 転生札を自分の札として加える
+      target_player.update(hand_card_num: reincarnation_card.id)
+      reincarnation_card.update(player_id: target_player.id)
+      # 天性したことをみんなに伝える
+      messages << display_text( target_player.user_name + "\nは転生しました" )
+      return messages
+    end
   end
 
   def dead_process(xeno, loser)
