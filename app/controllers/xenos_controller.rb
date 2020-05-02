@@ -897,8 +897,8 @@ class XenosController < ApplicationController
 
     Card.destroy_all
 
-    # card_list=[1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,10]
-    card_list=[1,1,1,1,10,10,10]
+    card_list=[1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,10]
+    # card_list=[1,1,1,1,10,10,10]
     card_list.each { |card_num| Card.create(xeno_id: xeno.id, card_num: card_num, reincarnation_card: false) }
 
     reincarnation_card = Card.all.shuffle.first
