@@ -6,10 +6,10 @@ class XenosController < ApplicationController
 
   def client
     @client ||= Line::Bot::Client.new { |config|
-      config.channel_secret = ENV["LINE_CHANNEL_SECRET"]
-      config.channel_token = ENV["LINE_CHANNEL_TOKEN"]
-      # config.channel_secret = "7351c06566970cf7505464368ac7c502"
-      # config.channel_token = "XYq4BqTXejAoNxs0W6D0ZEwd6sbCfpmyNAs9kIx4hn4z5nqjxa19ic0SsL+NuXErhH+DDleA5Lx6zqnR3Hox6o5xq/6ac5hqWBsYCX0wh6nEAeiotLpp6in7p3yB3jUt94ISc5Nryo2lBqfM/vzp/wdB04t89/1O/w1cDnyilFU="
+      # config.channel_secret = ENV["LINE_CHANNEL_SECRET"]
+      # config.channel_token = ENV["LINE_CHANNEL_TOKEN"]
+      config.channel_secret = "7351c06566970cf7505464368ac7c502"
+      config.channel_token = "XYq4BqTXejAoNxs0W6D0ZEwd6sbCfpmyNAs9kIx4hn4z5nqjxa19ic0SsL+NuXErhH+DDleA5Lx6zqnR3Hox6o5xq/6ac5hqWBsYCX0wh6nEAeiotLpp6in7p3yB3jUt94ISc5Nryo2lBqfM/vzp/wdB04t89/1O/w1cDnyilFU="
     }
   end
 
@@ -44,9 +44,10 @@ class XenosController < ApplicationController
             client.reply_message(event['replyToken'], initial_setting(@xeno))
 
           elsif event.message['text'].eql?('@ステータス')
-            player_ids = Player.where(xeno_id: @xeno.id).pluck(:line_user_id)
+            players = Player.where(xeno_id: @xeno.id)
+            player_ids = players.pluck(:line_user_id)
 
-            client.multicast( player_ids, status_text(@xeno) )
+            client.multicast( player_ids, display_text( status_text(@xeno, players) ) )
           end
 
           # 初期設定
@@ -873,10 +874,10 @@ class XenosController < ApplicationController
     return text
   end
 
-  def status_text(xeno)
-    player_ids = Player.where(xeno_id: @xeno.id).pluck(:line_user_id)
+  def status_text(xeno, players)
+    player_ids = players.pluck(:id)
     deck = []
-    fields = []
+    fields = [ [], [], [], [] ]
 
     Card.all.order(:updated_at).each do |card|
       case card.player_id
@@ -898,7 +899,7 @@ class XenosController < ApplicationController
     text += deck.join(', ')
 
     players.each_with_index do |player, index|
-      text += "(#{player.user_name} 捨て札)"
+      text += "\n(#{player.user_name} 捨て札)\n"
       text += fields[index].join(', ')
     end
 
