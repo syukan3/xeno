@@ -6,10 +6,10 @@ class XenosController < ApplicationController
 
   def client
     @client ||= Line::Bot::Client.new { |config|
-      # config.channel_secret = ENV["LINE_CHANNEL_SECRET"]
-      # config.channel_token = ENV["LINE_CHANNEL_TOKEN"]
-      config.channel_secret = "7351c06566970cf7505464368ac7c502"
-      config.channel_token = "XYq4BqTXejAoNxs0W6D0ZEwd6sbCfpmyNAs9kIx4hn4z5nqjxa19ic0SsL+NuXErhH+DDleA5Lx6zqnR3Hox6o5xq/6ac5hqWBsYCX0wh6nEAeiotLpp6in7p3yB3jUt94ISc5Nryo2lBqfM/vzp/wdB04t89/1O/w1cDnyilFU="
+      config.channel_secret = ENV["LINE_CHANNEL_SECRET"]
+      config.channel_token = ENV["LINE_CHANNEL_TOKEN"]
+      # config.channel_secret = "7351c06566970cf7505464368ac7c502"
+      # config.channel_token = "XYq4BqTXejAoNxs0W6D0ZEwd6sbCfpmyNAs9kIx4hn4z5nqjxa19ic0SsL+NuXErhH+DDleA5Lx6zqnR3Hox6o5xq/6ac5hqWBsYCX0wh6nEAeiotLpp6in7p3yB3jUt94ISc5Nryo2lBqfM/vzp/wdB04t89/1O/w1cDnyilFU="
     }
   end
 
