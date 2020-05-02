@@ -43,6 +43,10 @@ class XenosController < ApplicationController
 
             client.reply_message(event['replyToken'], initial_setting(@xeno))
 
+          elsif event.message['text'].eql?('@ステータス')
+            player_ids = Player.where(xeno_id: @xeno.id).pluck(:line_user_id)
+
+            client.multicast( player_ids, status_text(@xeno) )
           end
 
           # 初期設定
@@ -870,8 +874,7 @@ class XenosController < ApplicationController
   end
 
   def status_text(xeno)
-    players = Player.all
-    player_ids = players.ids
+    player_ids = Player.where(xeno_id: @xeno.id).pluck(:line_user_id)
     deck = []
     fields = []
 
@@ -948,12 +951,27 @@ class XenosController < ApplicationController
 
 
   def next_order(xeno)
-    num_of_player = xeno.num_of_player
+
+    players = Player.where(xeno_id: @xeno.id, dead_flag: false).order(order: 'asc')
+    players_order_array = players.pluck(:order)
+
     now_order = xeno.now_order
-    if num_of_player == now_order
-      return 1
+
+    min = players_order_array.first
+    max = players_order_array.last
+
+    if now_order + 1 > max
+      return players_order_array.first
     else
-      return now_order + 1
+
+      if players_order_array.include?(now_order + 1)
+        return now_order + 1
+      elsif players_order_array.include?(now_order + 2)
+        return now_order + 2
+      elsif players_order_array.include?(now_order + 3)
+        return now_order + 3
+      end
+
     end
   end
 
