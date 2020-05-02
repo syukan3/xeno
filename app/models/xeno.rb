@@ -1,5 +1,7 @@
 class Xeno < ApplicationRecord
   has_many :cards
+  has_one :player
+
 
   # enum status: {
   #     pending:      0,  # 保留
