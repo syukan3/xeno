@@ -1370,11 +1370,18 @@ class XenosController < ApplicationController
   end
 
   def exchange_card(now_player, target_player)
-    now_player.update(hand_card_num: target_player.hand_card.id)
-    target_player.update(hand_card_num: now_player.hand_card.id)
+    ActiveRecord::Base.transaction do
+      now_hand_card_id = now_player.hand_card.id
+      target_hand_card_id = target_player.hand_card.id
 
-    now_player.hand_card.update(player_id: target_player.id)
-    target_player.hand_card.update(player_id: now_player.id)
+      # Player の card_id を更新
+      now_player.update(hand_card_num: target_hand_card_id)
+      target_player.update(hand_card_num: now_hand_card_id)
+
+      # Card の player_id を更新
+      Card.find(now_hand_card_id).update(player_id: target_player.id)
+      Card.find(target_hand_card_id).update(player_id: now_player.id)
+    end
   end
 
   def display_emperor(xeno, target_player, card_ja)
