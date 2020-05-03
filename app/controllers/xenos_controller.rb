@@ -758,7 +758,7 @@ class XenosController < ApplicationController
     distribute_cards(xeno, players)
 
     # ゲーム中
-    xeno.update(status: 2, now_order: 1)
+    xeno.update(status: 2, now_order: 1, winner_player_id: nil)
 
     # Player 全員に順番送信
     player_ids = players.pluck(:line_user_id)
