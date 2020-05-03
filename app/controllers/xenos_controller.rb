@@ -415,6 +415,8 @@ class XenosController < ApplicationController
                     # プレイヤーの手札を更新
                     now_player.update(draw_card_num: select_card_id)
 
+                    # カードを更新
+                    select_card.update(player_id: now_player.id)
 
 
                     # ステータス
