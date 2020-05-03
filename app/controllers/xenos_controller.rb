@@ -506,7 +506,7 @@ class XenosController < ApplicationController
                     select_card.update(field_flag: true)
 
                     messages = [
-                        display_text( "正解です。\n#{target_player.user_name}\nは負けました" )
+                        display_text( now_player.user_name + "は\n" + target_player.user_name + "の\n" + card_ja[:"#{select_card.card_num}"] + "\nを【公開処刑】しました" )
                     ]
 
                     if select_card.card_num == 10
