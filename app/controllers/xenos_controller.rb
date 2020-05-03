@@ -754,6 +754,9 @@ class XenosController < ApplicationController
     # カード初期化
     initial_set_card(xeno)
 
+    # プレイヤー初期化
+    initial_players(xeno, players)
+
     # カード配布
     distribute_cards(xeno, players)
 
@@ -920,6 +923,12 @@ class XenosController < ApplicationController
 
     reincarnation_card = Card.all.shuffle.first
     reincarnation_card.update(reincarnation_card: true)
+  end
+
+  def initial_players(xeno, players)
+    players.each do |player|
+      player.update(dead_flag: false, hand_card_num: nil, draw_card_num: nil, predict_flag: nil, defence_flag: nil)
+    end
   end
 
   def distribute_cards(xeno, players)
