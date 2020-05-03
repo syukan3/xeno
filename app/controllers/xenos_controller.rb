@@ -914,8 +914,6 @@ class XenosController < ApplicationController
   end
 
   def initial_set_card(xeno)
-    return if xeno.status != 1
-
     Card.destroy_all
 
     card_list=[1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,10]
