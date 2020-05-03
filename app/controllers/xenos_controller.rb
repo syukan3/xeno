@@ -919,7 +919,7 @@ class XenosController < ApplicationController
     Card.destroy_all
 
     card_list=[1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,10]
-    card_list.each { |card_num| Card.create(xeno_id: xeno.id, card_num: card_num, reincarnation_card: false) }
+    card_list.each { |card_num| Card.create(xeno_id: xeno.id, card_num: card_num, player_id: nil, reincarnation_card: false, field_flag: false) }
 
     reincarnation_card = Card.all.shuffle.first
     reincarnation_card.update(reincarnation_card: true)
@@ -1121,6 +1121,7 @@ class XenosController < ApplicationController
         '7': '○●選択●○',
         '8': '○●交換●○',
         '9': '☆★公開処刑★☆',
+        '19': '☆★公開処刑★☆',
         '10': '☆★潜伏・転生★☆'
     }
     return display_text_hash
