@@ -1255,68 +1255,35 @@ class XenosController < ApplicationController
   end
 
   def select_target_player(xeno, player)
-    players = nil
-
-    if xeno.num_of_player == 2
-      Player.where(xeno_id: xeno.id).each do |p|
-        players = p if player.id != p.id
-      end
-    else
-      players = Player.where(xeno_id: xeno.id).where.not(player_id: player.id)
-    end
-
+    players = Player.where(xeno_id: xeno.id, dead_flag: false).where.not(id: player.id)
     return players
   end
 
   def select_target_text(xeno, players, card_num)
     actions = []
-    if xeno.num_of_player != 2
-      players.each do |player|
-        action =
-            {
-                "type": "message",
-                "label": player.user_name,
-                "text": "@target_#{player.id}_#{card_num}"
-            }
-        actions.push(action)
-      end
-
-      json =
-          {
-              "type": "template",
-              "altText": "This is a buttons template",
-              "template": {
-                  "type": "buttons",
-                  "title": display_text_hash[:"#{card_num}"],
-                  "text": "対象を選択してください",
-                  "actions": actions
-              }
-          }
-
-      return json
-
-    else
+    players.each do |player|
       action =
           {
               "type": "message",
-              "label": players.user_name,
-              "text": "@target_#{players.id}_#{card_num}"
+              "label": player.user_name,
+              "text": "@target_#{player.id}_#{card_num}"
           }
       actions.push(action)
-
-      json =
-          {
-              "type": "template",
-              "altText": "This is a buttons template",
-              "template": {
-                  "type": "buttons",
-                  "title": display_text_hash[:"#{card_num}"],
-                  "text": "対象を選択してください",
-                  "actions": actions
-              }
-          }
-      return json
     end
+
+    json =
+        {
+            "type": "template",
+            "altText": "This is a buttons template",
+            "template": {
+                "type": "buttons",
+                "title": display_text_hash[:"#{card_num}"],
+                "text": "対象を選択してください",
+                "actions": actions
+            }
+        }
+
+    return json
   end
 
   def seeing_select_text(xeno, target_player, not_field_cards)
